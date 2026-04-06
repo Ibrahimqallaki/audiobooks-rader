@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import {
@@ -11,10 +11,12 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react"
+import { getTTSEngine } from "@/lib/tts-engine"
 
 interface AudioPlayerProps {
   audioUrl: string | null
   title?: string
+  chapterText?: string // For TTS-based chapters
   onChapterChange?: (direction: "prev" | "next") => void
   hasNextChapter?: boolean
   hasPrevChapter?: boolean
@@ -23,6 +25,7 @@ interface AudioPlayerProps {
 export function AudioPlayer({
   audioUrl,
   title = "Kapitel 1",
+  chapterText,
   onChapterChange,
   hasNextChapter = false,
   hasPrevChapter = false,
@@ -34,14 +37,23 @@ export function AudioPlayer({
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [useTTS, setUseTTS] = useState(!!chapterText && !audioUrl)
+  const ttsEngineRef = useRef(getTTSEngine())
 
+  // Initialize audio playback
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || useTTS) return
 
     const updateTime = () => setCurrentTime(audio.currentTime)
     const updateDuration = () => setDuration(audio.duration)
-    const handleEnded = () => setIsPlaying(false)
+    const handleEnded = () => {
+      setIsPlaying(false)
+      // Auto-play next chapter if available
+      if (hasNextChapter) {
+        onChapterChange?.("next")
+      }
+    }
 
     audio.addEventListener("timeupdate", updateTime)
     audio.addEventListener("loadedmetadata", updateDuration)
@@ -52,33 +64,52 @@ export function AudioPlayer({
       audio.removeEventListener("loadedmetadata", updateDuration)
       audio.removeEventListener("ended", handleEnded)
     }
-  }, [audioUrl])
+  }, [audioUrl, useTTS, hasNextChapter, onChapterChange])
 
-  const togglePlay = () => {
-    if (!audioRef.current) return
-    if (isPlaying) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play()
+  const togglePlay = useCallback(() => {
+    if (useTTS && chapterText) {
+      // Use TTS engine
+      if (isPlaying) {
+        ttsEngineRef.current.cancel()
+        setIsPlaying(false)
+      } else {
+        setIsPlaying(true)
+        ttsEngineRef.current.speak(chapterText, {
+          rate: playbackRate,
+          lang: "sv-SE",
+        }).then(() => {
+          setIsPlaying(false)
+        }).catch((err) => {
+          console.error("[v0] TTS error:", err)
+          setIsPlaying(false)
+        })
+      }
+    } else if (audioRef.current) {
+      // Use regular audio
+      if (isPlaying) {
+        audioRef.current.pause()
+      } else {
+        audioRef.current.play()
+      }
+      setIsPlaying(!isPlaying)
     }
-    setIsPlaying(!isPlaying)
-  }
+  }, [isPlaying, useTTS, chapterText, playbackRate])
 
-  const handleSeek = (value: number[]) => {
-    if (!audioRef.current) return
+  const handleSeek = useCallback((value: number[]) => {
+    if (!audioRef.current || useTTS) return
     audioRef.current.currentTime = value[0]
     setCurrentTime(value[0])
-  }
+  }, [useTTS])
 
-  const handleVolumeChange = (value: number[]) => {
+  const handleVolumeChange = useCallback((value: number[]) => {
     if (!audioRef.current) return
     const newVolume = value[0]
     audioRef.current.volume = newVolume
     setVolume(newVolume)
     setIsMuted(newVolume === 0)
-  }
+  }, [])
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     if (!audioRef.current) return
     if (isMuted) {
       audioRef.current.volume = volume || 1
@@ -87,35 +118,40 @@ export function AudioPlayer({
       audioRef.current.volume = 0
       setIsMuted(true)
     }
-  }
+  }, [isMuted, volume])
 
-  const changePlaybackRate = () => {
+  const changePlaybackRate = useCallback(() => {
     const rates = [0.5, 0.75, 1, 1.25, 1.5, 2]
     const currentIndex = rates.indexOf(playbackRate)
     const nextIndex = (currentIndex + 1) % rates.length
     const newRate = rates[nextIndex]
-    if (audioRef.current) {
+
+    if (useTTS) {
+      // For TTS, we would need to restart with new rate
+      // For now, just update the rate for next playback
+      setPlaybackRate(newRate)
+    } else if (audioRef.current) {
       audioRef.current.playbackRate = newRate
     }
     setPlaybackRate(newRate)
-  }
+  }, [playbackRate, useTTS])
 
-  const formatTime = (time: number) => {
+  const formatTime = useCallback((time: number) => {
     if (isNaN(time)) return "0:00"
     const minutes = Math.floor(time / 60)
     const seconds = Math.floor(time % 60)
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
-  }
+  }, [])
 
-  const skip = (seconds: number) => {
-    if (!audioRef.current) return
+  const skip = useCallback((seconds: number) => {
+    if (!audioRef.current || useTTS) return
     audioRef.current.currentTime = Math.max(
       0,
       Math.min(duration, audioRef.current.currentTime + seconds)
     )
-  }
+  }, [duration, useTTS])
 
-  if (!audioUrl) {
+  if (!audioUrl && !chapterText) {
     return (
       <div className="rounded-xl bg-card p-6 border border-border">
         <div className="flex flex-col items-center justify-center gap-4 py-8 text-muted-foreground">
@@ -133,12 +169,14 @@ export function AudioPlayer({
 
   return (
     <div className="rounded-xl bg-card p-6 border border-border">
-      <audio ref={audioRef} src={audioUrl} />
+      {!useTTS && <audio ref={audioRef} src={audioUrl || undefined} />}
 
       {/* Title */}
       <div className="mb-6 text-center">
         <h3 className="font-semibold text-foreground text-lg">{title}</h3>
-        <p className="text-sm text-muted-foreground">AI-genererad ljudbok</p>
+        <p className="text-sm text-muted-foreground">
+          {useTTS ? "AI-genererad uppläsning" : "Ljudbok"}
+        </p>
       </div>
 
       {/* Progress bar */}
@@ -149,6 +187,7 @@ export function AudioPlayer({
           step={1}
           onValueChange={handleSeek}
           className="cursor-pointer"
+          disabled={useTTS}
         />
         <div className="flex justify-between mt-2 text-xs text-muted-foreground">
           <span>{formatTime(currentTime)}</span>
@@ -172,7 +211,8 @@ export function AudioPlayer({
           variant="ghost"
           size="icon"
           onClick={() => skip(-10)}
-          className="text-muted-foreground hover:text-foreground"
+          disabled={useTTS}
+          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
         >
           <span className="text-xs font-medium">-10</span>
         </Button>
@@ -193,7 +233,8 @@ export function AudioPlayer({
           variant="ghost"
           size="icon"
           onClick={() => skip(10)}
-          className="text-muted-foreground hover:text-foreground"
+          disabled={useTTS}
+          className="text-muted-foreground hover:text-foreground disabled:opacity-30"
         >
           <span className="text-xs font-medium">+10</span>
         </Button>
@@ -217,7 +258,8 @@ export function AudioPlayer({
             variant="ghost"
             size="icon"
             onClick={toggleMute}
-            className="text-muted-foreground hover:text-foreground"
+            disabled={useTTS}
+            className="text-muted-foreground hover:text-foreground disabled:opacity-30"
           >
             {isMuted ? (
               <VolumeX className="size-5" />
@@ -230,6 +272,7 @@ export function AudioPlayer({
             max={1}
             step={0.1}
             onValueChange={handleVolumeChange}
+            disabled={useTTS}
             className="w-24"
           />
         </div>

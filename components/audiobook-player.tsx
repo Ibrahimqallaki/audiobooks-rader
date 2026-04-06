@@ -17,6 +17,7 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { updateProgress, getBookmarks, addBookmark, removeBookmark, type Audiobook, type Bookmark as BookmarkType } from "@/lib/audiobook-store"
+import { getTTSEngine } from "@/lib/tts-engine"
 
 interface AudiobookPlayerProps {
   book: Audiobook

@@ -85,20 +85,10 @@ export default function Home() {
   }, [])
 
   const generateAudio = async (text: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text)
-
-      setTimeout(() => {
-        if (typeof window !== "undefined" && window.speechSynthesis) {
-          utterance.lang = "sv-SE"
-          utterance.rate = 1
-          utterance.pitch = 1
-          window.speechSynthesis.speak(utterance)
-        }
-        const silentAudio = createSilentAudio()
-        resolve(silentAudio)
-      }, 1000)
-    })
+    // Create a silent audio blob to represent generated audio
+    // The actual TTS will be handled by the AudioPlayer component
+    const silentAudio = createSilentAudio()
+    return silentAudio
   }
 
   const createSilentAudio = (): string => {
@@ -279,8 +269,9 @@ Erik nickade, kysste henne på kinden och började sin långa vandring mot norr.
 
           <div className="space-y-6">
             <AudioPlayer
-              audioUrl={activeAudioUrl}
+              audioUrl={audioMode === "uploaded" ? activeAudioUrl : null}
               title={activeTitle}
+              chapterText={audioMode === "generated" ? currentChapter?.text : undefined}
               onChapterChange={audioMode === "generated" ? handleChapterChange : undefined}
               hasNextChapter={audioMode === "generated" && currentChapterIndex < chapters.length - 1}
               hasPrevChapter={audioMode === "generated" && currentChapterIndex > 0}
