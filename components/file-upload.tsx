@@ -99,16 +99,15 @@ export function FileUpload({
     }
 
     if (fileType === "pdf") {
-      // Use pdf.js to extract text with legacy build (includes worker)
-      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
+      // Use pdf.js to extract text
+      const pdfjsLib = await import("pdfjs-dist")
       
-      // Disable worker to avoid CORS issues
+      // Set up the worker from CDN
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+      
       const arrayBuffer = await file.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ 
         data: arrayBuffer,
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        useSystemFonts: true,
       }).promise
 
       let fullText = ""
