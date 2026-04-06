@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'VoiceBook - Text till Ljudbok',
-  description: 'Konvertera text till professionella ljudböcker med AI-röster',
+  title: 'AudioBook Reader',
+  description: 'Lyssna på dina ljudböcker med bokmärken, kapitel och sömntimer',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="sv">
       <body className="font-sans antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
