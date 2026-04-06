@@ -99,14 +99,17 @@ export function FileUpload({
     }
 
     if (fileType === "pdf") {
-      // Use pdf.js to extract text
-      const pdfjsLib = await import("pdfjs-dist")
+      // Use pdf.js to extract text with legacy build (includes worker)
+      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs")
       
-      // Set the worker source
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-
+      // Disable worker to avoid CORS issues
       const arrayBuffer = await file.arrayBuffer()
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+      const pdf = await pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      }).promise
 
       let fullText = ""
       for (let i = 1; i <= pdf.numPages; i++) {
